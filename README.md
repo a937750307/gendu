@@ -55,4 +55,4 @@
 
 ## 截图
 
-![截图](screenshot.png)
+![screenshot](screenshot.png)
