@@ -3,13 +3,36 @@
 
 let cachedVoices = null;
 
-const hasTTS = typeof window !== 'undefined' && !!window.speechSynthesis;
-const hasUtterance = typeof window !== 'undefined' && typeof window.SpeechSynthesisUtterance === 'function';
+// Do not cache availability at module load time: some browsers expose
+// speechSynthesis only after DOMContentLoaded or a user gesture.
+function hasTTS() {
+  return typeof window !== 'undefined' && !!window.speechSynthesis;
+}
 
-if (hasTTS && window.speechSynthesis.onvoiceschanged !== undefined) {
-  window.speechSynthesis.onvoiceschanged = () => {
-    cachedVoices = window.speechSynthesis.getVoices();
-  };
+function hasUtterance() {
+  return typeof window !== 'undefined' && typeof window.SpeechSynthesisUtterance === 'function';
+}
+
+function registerVoicesChanged() {
+  if (!hasTTS()) return;
+  try {
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        cachedVoices = window.speechSynthesis.getVoices();
+      };
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+// Register on first use; DOMContentLoaded is also safe as a fallback.
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', registerVoicesChanged);
+  } else {
+    registerVoicesChanged();
+  }
 }
 
 function getVoicesSync() {
@@ -33,7 +56,7 @@ function isMobile() {
 // Attempt to unlock speech synthesis on mobile (iOS requires user gesture).
 // This should be called synchronously inside a click/touch event handler.
 function unlockSpeech() {
-  if (!hasTTS || !hasUtterance) return;
+  if (!hasTTS() || !hasUtterance()) return;
   try {
     const u = new window.SpeechSynthesisUtterance(' ');
     u.volume = 0;
@@ -105,11 +128,11 @@ function createUtterance(text, config, onCharBoundary, onDone, onError) {
 // Speak text with speed config and character boundary callback
 function speakWithConfig(text, config, onCharBoundary) {
   return new Promise((resolve, reject) => {
-    if (!hasTTS) {
+    if (!hasTTS()) {
       reject(new Error('当前环境未提供 speechSynthesis 接口'));
       return;
     }
-    if (!hasUtterance) {
+    if (!hasUtterance()) {
       reject(new Error('当前环境未提供 SpeechSynthesisUtterance 接口'));
       return;
     }
@@ -161,7 +184,7 @@ function speakWithConfig(text, config, onCharBoundary) {
 }
 
 function stopSpeaking() {
-  if (hasTTS) {
+  if (hasTTS()) {
     window.speechSynthesis.cancel();
   }
 }
