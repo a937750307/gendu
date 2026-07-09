@@ -32,7 +32,7 @@ function isMobile() {
 function unlockSpeech() {
   if (typeof speechSynthesis === 'undefined') return;
   try {
-    const u = new SpeechSynthesisUtterance('');
+    const u = new SpeechSynthesisUtterance(' ');
     u.volume = 0;
     speechSynthesis.speak(u);
   } catch (e) {
@@ -69,7 +69,7 @@ function createUtterance(text, config, onCharBoundary, onDone, onError) {
   };
 
   const estDuration = (textLength * 250) / (config.speed || 1.0);
-  const charInterval = Math.max(50, estDuration / textLength);
+  const charInterval = textLength > 0 ? Math.max(50, estDuration / textLength) : 50;
 
   charTimer = setInterval(() => {
     if (lastCharIndex < textLength) {
@@ -90,7 +90,10 @@ function createUtterance(text, config, onCharBoundary, onDone, onError) {
 
   utter.onerror = (e) => {
     clearInterval(charTimer);
-    if (onError) onError(e);
+    const err = new Error(e.error || 'TTS error');
+    err.error = e.error || 'unknown';
+    err.message = e.message || err.message;
+    if (onError) onError(err);
   };
 
   return utter;
@@ -126,7 +129,12 @@ function speakWithConfig(text, config, onCharBoundary) {
         fallbackUtter.pitch = 1;
         fallbackUtter.volume = 1;
         fallbackUtter.onend = onDone;
-        fallbackUtter.onerror = (err) => onError(err, true);
+        fallbackUtter.onerror = (ev) => {
+          const err = new Error(ev.error || 'TTS fallback error');
+          err.error = ev.error || 'unknown';
+          err.message = ev.message || err.message;
+          onError(err, true);
+        };
         speechSynthesis.speak(fallbackUtter);
       } catch (err) {
         reject(err);
