@@ -3,16 +3,19 @@
 
 let cachedVoices = null;
 
-if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
-  speechSynthesis.onvoiceschanged = () => {
-    cachedVoices = speechSynthesis.getVoices();
+const hasTTS = typeof window !== 'undefined' && !!window.speechSynthesis;
+const hasUtterance = typeof window !== 'undefined' && typeof window.SpeechSynthesisUtterance === 'function';
+
+if (hasTTS && window.speechSynthesis.onvoiceschanged !== undefined) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    cachedVoices = window.speechSynthesis.getVoices();
   };
 }
 
 function getVoicesSync() {
   if (cachedVoices && cachedVoices.length) return cachedVoices;
   try {
-    cachedVoices = speechSynthesis.getVoices();
+    cachedVoices = window.speechSynthesis.getVoices();
     return cachedVoices || [];
   } catch (e) {
     return [];
@@ -30,11 +33,11 @@ function isMobile() {
 // Attempt to unlock speech synthesis on mobile (iOS requires user gesture).
 // This should be called synchronously inside a click/touch event handler.
 function unlockSpeech() {
-  if (typeof speechSynthesis === 'undefined') return;
+  if (!hasTTS || !hasUtterance) return;
   try {
-    const u = new SpeechSynthesisUtterance(' ');
+    const u = new window.SpeechSynthesisUtterance(' ');
     u.volume = 0;
-    speechSynthesis.speak(u);
+    window.speechSynthesis.speak(u);
   } catch (e) {
     // ignore
   }
@@ -43,7 +46,7 @@ function unlockSpeech() {
 // Core speak helper, returns a function to start speaking.
 // Kept separate so we can call speechSynthesis.speak() synchronously.
 function createUtterance(text, config, onCharBoundary, onDone, onError) {
-  const utter = new SpeechSynthesisUtterance(text);
+  const utter = new window.SpeechSynthesisUtterance(text);
   utter.rate = config.speed || 1.0;
   utter.pitch = 1;
   utter.volume = 1;
@@ -102,12 +105,16 @@ function createUtterance(text, config, onCharBoundary, onDone, onError) {
 // Speak text with speed config and character boundary callback
 function speakWithConfig(text, config, onCharBoundary) {
   return new Promise((resolve, reject) => {
-    if (typeof speechSynthesis === 'undefined') {
-      reject(new Error('浏览器不支持语音合成'));
+    if (!hasTTS) {
+      reject(new Error('当前环境未提供 speechSynthesis 接口'));
+      return;
+    }
+    if (!hasUtterance) {
+      reject(new Error('当前环境未提供 SpeechSynthesisUtterance 接口'));
       return;
     }
 
-    speechSynthesis.cancel();
+    window.speechSynthesis.cancel();
 
     function onDone() {
       resolve();
@@ -124,7 +131,7 @@ function speakWithConfig(text, config, onCharBoundary) {
       }
       // First attempt failed, try again with browser defaults
       try {
-        const fallbackUtter = new SpeechSynthesisUtterance(text);
+        const fallbackUtter = new window.SpeechSynthesisUtterance(text);
         fallbackUtter.rate = (config && config.speed) || 1.0;
         fallbackUtter.pitch = 1;
         fallbackUtter.volume = 1;
@@ -154,7 +161,7 @@ function speakWithConfig(text, config, onCharBoundary) {
 }
 
 function stopSpeaking() {
-  if (typeof speechSynthesis !== 'undefined') {
-    speechSynthesis.cancel();
+  if (hasTTS) {
+    window.speechSynthesis.cancel();
   }
 }

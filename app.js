@@ -135,8 +135,8 @@ async function advanceToNextLine() {
   } catch (err) {
     console.error('TTS error:', err);
     let msg = 'TTS朗读出错，请检查浏览器语音支持';
-    if (!window.speechSynthesis) {
-      msg = '当前浏览器不支持语音合成，请换用 Chrome / Safari / Edge';
+    if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== 'function') {
+      msg = '当前浏览器未开放语音合成（Web Speech API），请用系统浏览器（Chrome/Safari/Edge）打开，避免使用微信/QQ等内置浏览器';
     } else if (err && err.error === 'voice-unavailable') {
       msg = '无可用的中文语音，请检查系统语言或浏览器设置';
     } else if (err && err.message) {
