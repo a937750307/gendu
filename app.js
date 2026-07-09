@@ -210,6 +210,7 @@ function pausePlayback() {
 }
 
 async function resumeFromPause() {
+  unlockSpeech();
   stopCountdown();
   stopSpeaking();
   const row = app.rows[app.currentLine];
@@ -365,6 +366,7 @@ function addRow() {
 }
 
 function rowPlayFrom(idx) {
+  unlockSpeech();
   stopCountdown();
   stopSpeaking();
   if (app.preCountdownCancel) {
@@ -462,7 +464,10 @@ function handleNightModeToggle() {
 function bindEvents() {
   document.getElementById('addRowBtn').addEventListener('click', addRow);
 
-  document.getElementById('btnPlay').addEventListener('click', () => startPlayback(0));
+  document.getElementById('btnPlay').addEventListener('click', () => {
+    unlockSpeech();
+    startPlayback(0);
+  });
   document.getElementById('btnPause').addEventListener('click', pausePlayback);
   document.getElementById('btnStop').addEventListener('click', stopPlayback);
   document.getElementById('btnPrev').addEventListener('click', skipToPrev);
