@@ -134,7 +134,15 @@ async function advanceToNextLine() {
     });
   } catch (err) {
     console.error('TTS error:', err);
-    updateStatusText('TTS朗读出错，请检查浏览器语音支持', '');
+    let msg = 'TTS朗读出错，请检查浏览器语音支持';
+    if (!window.speechSynthesis) {
+      msg = '当前浏览器不支持语音合成，请换用 Chrome / Safari / Edge';
+    } else if (err && err.error === 'voice-unavailable') {
+      msg = '无可用的中文语音，请检查系统语言或浏览器设置';
+    } else if (err && err.message) {
+      msg = '朗读失败: ' + err.message;
+    }
+    updateStatusText(msg, '');
     app.state = 'idle';
     app.currentLine = -1;
     refreshAllRowStatuses(app);

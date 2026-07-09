@@ -28,13 +28,65 @@ function getBestVoice(voices) {
 function unlockSpeech() {
   if (typeof speechSynthesis === 'undefined') return;
   try {
-    const u = new SpeechSynthesisUtterance(' ');
+    const u = new SpeechSynthesisUtterance('');
     u.volume = 0;
     speechSynthesis.speak(u);
-    speechSynthesis.cancel();
   } catch (e) {
     // ignore
   }
+}
+
+// Core speak helper, returns a function to start speaking.
+// Kept separate so we can call speechSynthesis.speak() synchronously.
+function createUtterance(text, config, onCharBoundary, onDone, onError) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'zh-CN';
+  utter.rate = config.speed || 1.0;
+  utter.pitch = 1;
+  utter.volume = 1;
+
+  // Try to pick a Chinese voice synchronously (best effort on mobile)
+  const voices = getVoicesSync();
+  const zhVoice = getBestVoice(voices);
+  if (zhVoice) utter.voice = zhVoice;
+
+  const textLength = text.length;
+  let lastCharIndex = 0;
+  let charTimer = null;
+
+  utter.onboundary = (e) => {
+    if (e.charIndex !== undefined && e.charIndex > lastCharIndex) {
+      lastCharIndex = e.charIndex;
+      if (onCharBoundary) onCharBoundary(lastCharIndex);
+    }
+  };
+
+  const estDuration = (textLength * 250) / (config.speed || 1.0);
+  const charInterval = Math.max(50, estDuration / textLength);
+
+  charTimer = setInterval(() => {
+    if (lastCharIndex < textLength) {
+      lastCharIndex++;
+      if (onCharBoundary) onCharBoundary(lastCharIndex);
+    }
+  }, charInterval);
+
+  utter.onstart = () => {
+    if (onCharBoundary) onCharBoundary(0);
+  };
+
+  utter.onend = () => {
+    clearInterval(charTimer);
+    if (onCharBoundary) onCharBoundary(textLength);
+    if (onDone) onDone();
+  };
+
+  utter.onerror = (e) => {
+    clearInterval(charTimer);
+    if (onError) onError(e);
+  };
+
+  return utter;
 }
 
 // Speak text with speed config and character boundary callback
@@ -47,64 +99,42 @@ function speakWithConfig(text, config, onCharBoundary) {
 
     speechSynthesis.cancel();
 
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'zh-CN';
-    utter.rate = config.speed || 1.0;
-    utter.pitch = 1;
-    utter.volume = 1;
-
-    // Try to pick a Chinese voice synchronously (best effort on mobile)
-    const voices = getVoicesSync();
-    const zhVoice = getBestVoice(voices);
-    if (zhVoice) utter.voice = zhVoice;
-
-    const textLength = text.length;
-    let lastCharIndex = 0;
-    let charTimer = null;
-
-    // Use onboundary for word-level tracking
-    utter.onboundary = (e) => {
-      if (e.charIndex !== undefined && e.charIndex > lastCharIndex) {
-        lastCharIndex = e.charIndex;
-        if (onCharBoundary) onCharBoundary(lastCharIndex);
-      }
-    };
-
-    // Fallback: evenly distribute characters over estimated duration
-    // Estimate: ~250ms per character for Chinese at rate=1
-    const estDuration = (textLength * 250) / (config.speed || 1.0);
-    const charInterval = Math.max(50, estDuration / textLength);
-
-    charTimer = setInterval(() => {
-      if (lastCharIndex < textLength) {
-        lastCharIndex++;
-        if (onCharBoundary) onCharBoundary(lastCharIndex);
-      }
-    }, charInterval);
-
-    utter.onstart = () => {
-      if (onCharBoundary) onCharBoundary(0);
-    };
-
-    utter.onend = () => {
-      clearInterval(charTimer);
-      if (onCharBoundary) onCharBoundary(textLength);
+    function onDone() {
       resolve();
-    };
+    }
 
-    utter.onerror = (e) => {
-      clearInterval(charTimer);
+    function onError(e, fallback) {
       if (e.error === 'canceled' || e.error === 'interrupted') {
         resolve();
-      } else {
-        reject(e);
+        return;
       }
-    };
+      if (fallback) {
+        reject(e);
+        return;
+      }
+      // First attempt failed, try again with browser defaults
+      try {
+        const fallbackUtter = new SpeechSynthesisUtterance(text);
+        fallbackUtter.rate = (config && config.speed) || 1.0;
+        fallbackUtter.pitch = 1;
+        fallbackUtter.volume = 1;
+        fallbackUtter.onend = onDone;
+        fallbackUtter.onerror = (err) => onError(err, true);
+        speechSynthesis.speak(fallbackUtter);
+      } catch (err) {
+        reject(err);
+      }
+    }
 
     // Speak must be called synchronously (do not await first) so that
     // mobile browsers (especially iOS Safari) recognize it as part of the
     // user gesture that triggered playback.
-    speechSynthesis.speak(utter);
+    try {
+      const utter = createUtterance(text, config || {}, onCharBoundary, onDone, (e) => onError(e, false));
+      speechSynthesis.speak(utter);
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
