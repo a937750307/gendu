@@ -480,13 +480,6 @@ function handleImportFile() {
 
 // ===== Print =====
 function handlePrint() {
-  // Prepare row pause data attributes for print CSS
-  app.rows.forEach((row, idx) => {
-    if (row._rowEl) {
-      if (row._pauseInputEl) row._pauseInputEl.style.display = 'none';
-    }
-  });
-
   window.print();
 }
 
