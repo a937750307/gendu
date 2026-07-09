@@ -23,6 +23,10 @@ function getBestVoice(voices) {
   return voices.find(v => v.lang.startsWith('zh') || v.lang.startsWith('cmn')) || null;
 }
 
+function isMobile() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 // Attempt to unlock speech synthesis on mobile (iOS requires user gesture).
 // This should be called synchronously inside a click/touch event handler.
 function unlockSpeech() {
@@ -40,15 +44,18 @@ function unlockSpeech() {
 // Kept separate so we can call speechSynthesis.speak() synchronously.
 function createUtterance(text, config, onCharBoundary, onDone, onError) {
   const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = 'zh-CN';
   utter.rate = config.speed || 1.0;
   utter.pitch = 1;
   utter.volume = 1;
 
-  // Try to pick a Chinese voice synchronously (best effort on mobile)
-  const voices = getVoicesSync();
-  const zhVoice = getBestVoice(voices);
-  if (zhVoice) utter.voice = zhVoice;
+  // On mobile, use the browser's default voice to avoid issues where
+  // the device has no matching Chinese voice. On desktop, prefer Chinese.
+  if (!isMobile()) {
+    utter.lang = 'zh-CN';
+    const voices = getVoicesSync();
+    const zhVoice = getBestVoice(voices);
+    if (zhVoice) utter.voice = zhVoice;
+  }
 
   const textLength = text.length;
   let lastCharIndex = 0;
